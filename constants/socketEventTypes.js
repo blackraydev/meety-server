@@ -8,6 +8,7 @@ const SocketEventTypes = {
   RelayIce: 'relay-ice',
   IceCandidate: 'ice-candidate',
   SessionDescription: 'session-description',
+  Disconnecting: 'disconnecting',
 };
 
 module.exports = SocketEventTypes;

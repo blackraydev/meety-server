@@ -21,7 +21,7 @@ server.listen(PORT, () => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`User Connected :${socket.id}`);
+  console.log(`User Connected: ${socket.id}`);
 
   socket.on(SocketEventTypes.Join, (config) => {
     const { room: roomId } = config;
@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
   }
 
   socket.on(SocketEventTypes.Leave, leaveRoom);
-  socket.on('disconnecting', leaveRoom);
+  socket.on(SocketEventTypes.Disconnecting, leaveRoom);
 
   socket.on(SocketEventTypes.RelaySDP, ({ peerId, sessionDescription }) => {
     io.to(peerId).emit(SocketEventTypes.SessionDescription, {
