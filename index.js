@@ -9,6 +9,8 @@ const cors = require('cors');
 const SocketEventTypes = require('./constants/socketEventTypes');
 const PORT = process.env.PORT || 8000;
 
+const rooms = [];
+
 app.use(cors());
 
 app.get('/', (req, res) => {
@@ -26,6 +28,10 @@ io.on('connection', (socket) => {
   socket.on(SocketEventTypes.Join, (config) => {
     const { room: roomId } = config;
     const { rooms: joinedRooms } = socket;
+
+    if (!rooms.find((room) => room === roomId)) {
+      rooms.push(roomId);
+    }
 
     if (Array.from(joinedRooms).includes(roomId)) {
       return console.warn(`Already joined to ${roomId}`);
@@ -83,5 +89,26 @@ io.on('connection', (socket) => {
       peerId: socket.id,
       iceCandidate,
     });
+  });
+
+  socket.on(SocketEventTypes.VideoStatus, ({ roomId, enabled }) => {
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+
+    clients.forEach((clientId) => {
+      io.to(clientId).emit(SocketEventTypes.VideoStatus, { peerId: socket.id, enabled });
+    });
+  });
+
+  socket.on(SocketEventTypes.AudioStatus, ({ roomId, enabled }) => {
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+
+    clients.forEach((clientId) => {
+      io.to(clientId).emit(SocketEventTypes.AudioStatus, { peerId: socket.id, enabled });
+    });
+  });
+
+  socket.on(SocketEventTypes.CheckExistingRoom, ({ roomId }) => {
+    const exist = rooms.find((room) => room === roomId);
+    io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
   });
 });

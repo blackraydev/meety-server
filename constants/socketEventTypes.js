@@ -9,6 +9,9 @@ const SocketEventTypes = {
   IceCandidate: 'ice-candidate',
   SessionDescription: 'session-description',
   Disconnecting: 'disconnecting',
+  AudioStatus: 'audio-status',
+  VideoStatus: 'video-status',
+  CheckExistingRoom: 'check-existing-room',
 };
 
 module.exports = SocketEventTypes;
