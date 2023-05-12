@@ -9,13 +9,12 @@ const cors = require('cors');
 const SocketEventTypes = require('./constants/socketEventTypes');
 const PORT = process.env.PORT || 8000;
 
-const rooms = [];
+let rooms = {};
 
 app.use(cors());
 
 app.get('/', (req, res) => {
-  console.log('PING RECEIVED');
-  res.send('success');
+  res.send('Connection established');
 });
 
 server.listen(PORT, () => {
@@ -25,28 +24,30 @@ server.listen(PORT, () => {
 io.on('connection', (socket) => {
   console.log(`User Connected: ${socket.id}`);
 
-  socket.on(SocketEventTypes.Join, (config) => {
-    const { room: roomId } = config;
-    const { rooms: joinedRooms } = socket;
-
-    if (!rooms.find((room) => room === roomId)) {
-      rooms.push(roomId);
+  socket.on(SocketEventTypes.Join, ({ roomId, clientName }) => {
+    if (!rooms[roomId]) {
+      rooms[roomId] = [];
     }
 
-    if (Array.from(joinedRooms).includes(roomId)) {
-      return console.warn(`Already joined to ${roomId}`);
-    }
+    rooms[roomId].push({
+      clientId: socket.id,
+      clientName,
+    });
 
-    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    const clients = rooms[roomId].filter((client) => client.clientId !== socket.id);
 
-    clients.forEach((clientId) => {
-      io.to(clientId).emit(SocketEventTypes.AddPeer, {
+    clients.forEach((client) => {
+      // Sending other clients in room data about joined user
+      io.to(client.clientId).emit(SocketEventTypes.AddPeer, {
         peerId: socket.id,
+        peerName: clientName,
         createOffer: false,
       });
 
+      // Sending joined user data about other clients in room
       socket.emit(SocketEventTypes.AddPeer, {
-        peerId: clientId,
+        peerId: client.clientId,
+        peerName: client.clientName,
         createOffer: true,
       });
     });
@@ -55,12 +56,13 @@ io.on('connection', (socket) => {
   });
 
   function leaveRoom() {
-    const { rooms } = socket;
+    const newRooms = {};
 
-    Array.from(rooms).forEach((roomId) => {
-      const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    Object.entries(rooms).forEach(([roomId, clients]) => {
+      const newClients = clients.filter((client) => client.clientId !== socket.id);
+      const clientIds = clients.map((client) => client.clientId);
 
-      clients.forEach((clientId) => {
+      clientIds.forEach((clientId) => {
         io.to(clientId).emit(SocketEventTypes.RemovePeer, {
           peerId: socket.id,
         });
@@ -70,8 +72,16 @@ io.on('connection', (socket) => {
         });
       });
 
+      if (newClients.length) {
+        newRooms[roomId] = newClients;
+      } else {
+        delete newRooms[roomId];
+      }
+
       socket.leave(roomId);
     });
+
+    rooms = newRooms;
   }
 
   socket.on(SocketEventTypes.Leave, leaveRoom);
@@ -92,23 +102,31 @@ io.on('connection', (socket) => {
   });
 
   socket.on(SocketEventTypes.VideoStatus, ({ roomId, enabled }) => {
-    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    const clients = rooms[roomId];
 
-    clients.forEach((clientId) => {
-      io.to(clientId).emit(SocketEventTypes.VideoStatus, { peerId: socket.id, enabled });
-    });
+    if (clients) {
+      const clientIds = clients.map((client) => client.clientId);
+
+      clientIds.forEach((clientId) => {
+        io.to(clientId).emit(SocketEventTypes.VideoStatus, { peerId: socket.id, enabled });
+      });
+    }
   });
 
   socket.on(SocketEventTypes.AudioStatus, ({ roomId, enabled }) => {
-    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    const clients = rooms[roomId];
 
-    clients.forEach((clientId) => {
-      io.to(clientId).emit(SocketEventTypes.AudioStatus, { peerId: socket.id, enabled });
-    });
+    if (clients) {
+      const clientIds = clients.map((client) => client.clientId);
+
+      clientIds.forEach((clientId) => {
+        io.to(clientId).emit(SocketEventTypes.AudioStatus, { peerId: socket.id, enabled });
+      });
+    }
   });
 
   socket.on(SocketEventTypes.CheckExistingRoom, ({ roomId }) => {
-    const exist = rooms.find((room) => room === roomId);
+    const exist = Object.keys(rooms).find((room) => room === roomId);
     io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
   });
 });
