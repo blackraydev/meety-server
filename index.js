@@ -1,12 +1,15 @@
 const express = require('express');
 const http = require('http');
-const app = express();
-const server = http.createServer(app);
 const socket = require('socket.io');
-const io = socket(server);
 const cors = require('cors');
 
 const SocketEventTypes = require('./constants/socketEventTypes');
+const MediaTypes = require('./constants/mediaTypes');
+
+const app = express();
+const server = http.createServer(app);
+const io = socket(server);
+
 const PORT = process.env.PORT || 8000;
 
 let rooms = {};
@@ -22,16 +25,17 @@ server.listen(PORT, () => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`User Connected: ${socket.id}`);
-
-  socket.on(SocketEventTypes.Join, ({ roomId, clientName }) => {
+  const handleJoinRoom = ({ roomId, clientName, cameraActive, micActive }) => {
     if (!rooms[roomId]) {
       rooms[roomId] = [];
     }
 
     rooms[roomId].push({
       clientId: socket.id,
+      screenShareActive: false,
       clientName,
+      cameraActive,
+      micActive,
     });
 
     const clients = rooms[roomId].filter((client) => client.clientId !== socket.id);
@@ -41,6 +45,9 @@ io.on('connection', (socket) => {
       io.to(client.clientId).emit(SocketEventTypes.AddPeer, {
         peerId: socket.id,
         peerName: clientName,
+        peerCameraActive: cameraActive,
+        peerMicActive: micActive,
+        peerScreenShareActive: false,
         createOffer: false,
       });
 
@@ -48,14 +55,17 @@ io.on('connection', (socket) => {
       socket.emit(SocketEventTypes.AddPeer, {
         peerId: client.clientId,
         peerName: client.clientName,
+        peerCameraActive: client.cameraActive,
+        peerMicActive: client.micActive,
+        peerScreenShareActive: client.screenShareActive,
         createOffer: true,
       });
     });
 
     socket.join(roomId);
-  });
+  };
 
-  function leaveRoom() {
+  const handleLeaveRoom = () => {
     const newRooms = {};
 
     Object.entries(rooms).forEach(([roomId, clients]) => {
@@ -82,51 +92,77 @@ io.on('connection', (socket) => {
     });
 
     rooms = newRooms;
-  }
+  };
 
-  socket.on(SocketEventTypes.Leave, leaveRoom);
-  socket.on(SocketEventTypes.Disconnecting, leaveRoom);
-
-  socket.on(SocketEventTypes.RelaySDP, ({ peerId, sessionDescription }) => {
+  const handleRelaySDP = ({ peerId, sessionDescription }) => {
     io.to(peerId).emit(SocketEventTypes.SessionDescription, {
       peerId: socket.id,
       sessionDescription,
     });
-  });
+  };
 
-  socket.on(SocketEventTypes.RelayIce, ({ peerId, iceCandidate }) => {
+  const handleRelayIce = ({ peerId, iceCandidate }) => {
     io.to(peerId).emit(SocketEventTypes.IceCandidate, {
       peerId: socket.id,
       iceCandidate,
     });
-  });
+  };
 
-  socket.on(SocketEventTypes.VideoStatus, ({ roomId, enabled }) => {
-    const clients = rooms[roomId];
-
-    if (clients) {
-      const clientIds = clients.map((client) => client.clientId);
-
-      clientIds.forEach((clientId) => {
-        io.to(clientId).emit(SocketEventTypes.VideoStatus, { peerId: socket.id, enabled });
-      });
-    }
-  });
-
-  socket.on(SocketEventTypes.AudioStatus, ({ roomId, enabled }) => {
-    const clients = rooms[roomId];
-
-    if (clients) {
-      const clientIds = clients.map((client) => client.clientId);
-
-      clientIds.forEach((clientId) => {
-        io.to(clientId).emit(SocketEventTypes.AudioStatus, { peerId: socket.id, enabled });
-      });
-    }
-  });
-
-  socket.on(SocketEventTypes.CheckExistingRoom, ({ roomId }) => {
+  const handleCheckExistingRoom = ({ roomId }) => {
     const exist = Object.keys(rooms).find((room) => room === roomId);
     io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
-  });
+  };
+
+  const createMediaStatusHandler =
+    (type) =>
+    ({ roomId, enabled }) => {
+      const clients = rooms[roomId];
+
+      if (clients) {
+        const currentClient = clients.find((client) => client.clientId === socket.id);
+        const clientIds = clients
+          .filter((client) => client.clientId !== socket.id)
+          .map((client) => client.clientId);
+
+        let socketEventType;
+        let field;
+
+        switch (type) {
+          case MediaTypes.Audio: {
+            socketEventType = SocketEventTypes.AudioStatus;
+            field = 'micActive';
+            break;
+          }
+          case MediaTypes.Video: {
+            socketEventType = SocketEventTypes.VideoStatus;
+            field = 'cameraActive';
+            break;
+          }
+          case MediaTypes.ScreenShare: {
+            socketEventType = SocketEventTypes.ScreenShareStatus;
+            field = 'screenShareActive';
+            break;
+          }
+        }
+
+        if (currentClient) {
+          currentClient[field] = enabled;
+        }
+
+        clientIds.forEach((clientId) => {
+          io.to(clientId).emit(socketEventType, { peerId: socket.id, enabled });
+        });
+      }
+    };
+
+  socket.on(SocketEventTypes.Join, handleJoinRoom);
+  socket.on(SocketEventTypes.Leave, handleLeaveRoom);
+  socket.on(SocketEventTypes.Disconnecting, handleLeaveRoom);
+  socket.on(SocketEventTypes.RelaySDP, handleRelaySDP);
+  socket.on(SocketEventTypes.RelayIce, handleRelayIce);
+  socket.on(SocketEventTypes.CheckExistingRoom, handleCheckExistingRoom);
+
+  socket.on(SocketEventTypes.VideoStatus, createMediaStatusHandler(MediaTypes.Video));
+  socket.on(SocketEventTypes.AudioStatus, createMediaStatusHandler(MediaTypes.Audio));
+  socket.on(SocketEventTypes.ScreenShareStatus, createMediaStatusHandler(MediaTypes.ScreenShare));
 });
