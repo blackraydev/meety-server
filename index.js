@@ -16,8 +16,18 @@ let rooms = {};
 
 app.use(cors());
 
-app.get('/', (req, res) => {
+app.get('/', (_, res) => {
   res.send('Connection established');
+});
+
+app.get('/rooms/:id', (req, res) => {
+  const { id: roomId } = req.params;
+
+  if (rooms[roomId]) {
+    return res.send(rooms[roomId]);
+  }
+
+  return res.status(404).send();
 });
 
 server.listen(PORT, () => {
@@ -150,19 +160,7 @@ io.on('connection', (socket) => {
       }
     };
 
-  const handleCheckExistingRoom = ({ roomId }) => {
-    const exist = Object.keys(rooms).find((room) => room === roomId);
-    io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
-  };
-
-  socket.on(SocketEventTypes.Join, handleJoinRoom);
-  socket.on(SocketEventTypes.Leave, handleLeaveRoom);
-  socket.on(SocketEventTypes.Disconnecting, handleLeaveRoom);
-  socket.on(SocketEventTypes.RelaySDP, handleRelaySDP);
-  socket.on(SocketEventTypes.RelayIce, handleRelayIce);
-  socket.on(SocketEventTypes.CheckExistingRoom, handleCheckExistingRoom);
-
-  socket.on(SocketEventTypes.SendMessage, ({ roomId, clientName, message }) => {
+  const handleSendMessage = ({ roomId, clientName, message }) => {
     const clients = rooms[roomId];
 
     clients.forEach((client) => {
@@ -174,7 +172,14 @@ io.on('connection', (socket) => {
         },
       });
     });
-  });
+  };
+
+  socket.on(SocketEventTypes.Join, handleJoinRoom);
+  socket.on(SocketEventTypes.Leave, handleLeaveRoom);
+  socket.on(SocketEventTypes.Disconnecting, handleLeaveRoom);
+  socket.on(SocketEventTypes.RelaySDP, handleRelaySDP);
+  socket.on(SocketEventTypes.RelayIce, handleRelayIce);
+  socket.on(SocketEventTypes.SendMessage, handleSendMessage);
 
   socket.on(SocketEventTypes.VideoStatus, createMediaStatusHandler(MediaTypes.Video));
   socket.on(SocketEventTypes.AudioStatus, createMediaStatusHandler(MediaTypes.Audio));
