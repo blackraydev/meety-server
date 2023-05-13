@@ -108,11 +108,6 @@ io.on('connection', (socket) => {
     });
   };
 
-  const handleCheckExistingRoom = ({ roomId }) => {
-    const exist = Object.keys(rooms).find((room) => room === roomId);
-    io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
-  };
-
   const createMediaStatusHandler =
     (type) =>
     ({ roomId, enabled }) => {
@@ -155,12 +150,31 @@ io.on('connection', (socket) => {
       }
     };
 
+  const handleCheckExistingRoom = ({ roomId }) => {
+    const exist = Object.keys(rooms).find((room) => room === roomId);
+    io.to(socket.id).emit(SocketEventTypes.CheckExistingRoom, { exist });
+  };
+
   socket.on(SocketEventTypes.Join, handleJoinRoom);
   socket.on(SocketEventTypes.Leave, handleLeaveRoom);
   socket.on(SocketEventTypes.Disconnecting, handleLeaveRoom);
   socket.on(SocketEventTypes.RelaySDP, handleRelaySDP);
   socket.on(SocketEventTypes.RelayIce, handleRelayIce);
   socket.on(SocketEventTypes.CheckExistingRoom, handleCheckExistingRoom);
+
+  socket.on(SocketEventTypes.SendMessage, ({ roomId, clientName, message }) => {
+    const clients = rooms[roomId];
+
+    clients.forEach((client) => {
+      io.to(client.clientId).emit(SocketEventTypes.SendMessage, {
+        peerName: clientName,
+        message: {
+          messageText: message.messageText,
+          messageDate: new Date(message.messageDate).toTimeString().split(' ')[0], // TODO: Move in helpers
+        },
+      });
+    });
+  });
 
   socket.on(SocketEventTypes.VideoStatus, createMediaStatusHandler(MediaTypes.Video));
   socket.on(SocketEventTypes.AudioStatus, createMediaStatusHandler(MediaTypes.Audio));

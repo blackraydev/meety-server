@@ -13,6 +13,7 @@ const SocketEventTypes = {
   VideoStatus: 'video-status',
   ScreenShareStatus: 'screen-share-status',
   CheckExistingRoom: 'check-existing-room',
+  SendMessage: 'send-message',
 };
 
 module.exports = SocketEventTypes;
