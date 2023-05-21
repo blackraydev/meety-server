@@ -5,6 +5,7 @@ const cors = require('cors');
 
 const SocketEventTypes = require('./constants/socketEventTypes');
 const MediaTypes = require('./constants/mediaTypes');
+const db = require('./db.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +14,8 @@ const io = socket(server);
 const PORT = process.env.PORT || 8000;
 
 let rooms = {};
+
+db.authenticate().catch(console.error);
 
 app.use(cors());
 
@@ -168,7 +171,7 @@ io.on('connection', (socket) => {
         peerName: clientName,
         message: {
           messageText: message.messageText,
-          messageDate: new Date(message.messageDate).toTimeString().split(' ')[0], // TODO: Move in helpers
+          messageDate: message.messageDate,
         },
       });
     });
