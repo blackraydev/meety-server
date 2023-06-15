@@ -6,7 +6,7 @@ const express = require('express');
 const socket = require('socket.io');
 const cookieParser = require('cookie-parser');
 
-const db = require('./db');
+// const db = require('./db');
 const router = require('./routes/index');
 const socketHandler = require('./socketHandler');
 

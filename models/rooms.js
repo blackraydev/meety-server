@@ -20,6 +20,6 @@ const Rooms = db.define(
   },
 );
 
-(async () => await Rooms.sync())();
+// (async () => await Rooms.sync())();
 
 module.exports = Rooms;

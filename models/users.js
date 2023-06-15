@@ -36,6 +36,6 @@ const Users = db.define(
   { timestamps: false },
 );
 
-(async () => await Users.sync())();
+// (async () => await Users.sync())();
 
 module.exports = Users;
