@@ -23,7 +23,7 @@ app.use(cookieParser());
 app.use(router);
 
 // Database connection
-db.authenticate().catch(console.error);
+// db.authenticate().catch(console.error);
 
 // Socket connection
 io.on('connection', (socket) => socketHandler(socket, io));

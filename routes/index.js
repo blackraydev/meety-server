@@ -8,7 +8,7 @@ router.get('/', (_, res) => {
   res.send('Connection established');
 });
 
-router.use('/users', userRouter);
+// router.use('/users', userRouter);
 router.use('/rooms', roomRouter);
 
 module.exports = router;
